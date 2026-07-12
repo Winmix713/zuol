@@ -42,7 +42,7 @@ import {
   groupNodesAtParent,
   ungroupNode } from
 '../hooks/useLayers';
-import { uid } from '../lib/tree-utils';
+import { uid, findNode as findNodeInTree } from '../lib/tree-utils';
 import { LayerRow } from './LayerRow';
 import { ContextMenu } from './ContextMenu';
 interface LayersPanelProps {
@@ -54,6 +54,8 @@ interface LayersPanelProps {
   canRedo: boolean;
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
+  /** When provided, delete triggers the parent's confirmation modal. */
+  onRequestDelete?: (ids: Set<string>) => void;
 }
 export function LayersPanel({
   layers,
@@ -63,7 +65,8 @@ export function LayersPanel({
   canUndo,
   canRedo,
   selectedIds,
-  onSelectionChange
+  onSelectionChange,
+  onRequestDelete,
 }: LayersPanelProps) {
   const setSelectedIds = (
   updater: ((prev: Set<string>) => Set<string>) | Set<string>) =>
@@ -134,6 +137,18 @@ export function LayersPanel({
   );
   const handleDelete = useCallback(
     (id: string) => {
+      // Close any open context menu before proceeding.
+      setCtxMenu(null);
+
+      // Find the node — if it's locked, skip the delete silently.
+      const node = findNodeInTree(layers, id);
+      if (node?.locked) return;
+
+      if (onRequestDelete) {
+        onRequestDelete(new Set([id]));
+        setFocusedId(null);
+        return;
+      }
       setLayers((prev) => {
         const [next] = removeNode(prev, id);
         return next;
@@ -145,15 +160,31 @@ export function LayersPanel({
       });
       setFocusedId(null);
     },
-    [setLayers]
+    [layers, setLayers, onRequestDelete]
   );
   const handleBatchDelete = useCallback(
     (idSet: Set<string>) => {
-      setLayers((prev) => batchDelete(prev, idSet), 'Delete layers');
+      // Close any open context menu before proceeding.
+      setCtxMenu(null);
+
+      // Filter out locked nodes so they are never deleted.
+      const unlocked = new Set<string>();
+      idSet.forEach((id) => {
+        const node = findNodeInTree(layers, id);
+        if (node && !node.locked) unlocked.add(id);
+      });
+      if (unlocked.size === 0) return;
+
+      if (onRequestDelete) {
+        onRequestDelete(unlocked);
+        setFocusedId(null);
+        return;
+      }
+      setLayers((prev) => batchDelete(prev, unlocked), 'Delete layers');
       setSelectedIds(new Set());
       setFocusedId(null);
     },
-    [setLayers]
+    [layers, setLayers, onRequestDelete]
   );
   const handleDuplicate = useCallback(
     (id: string) => setLayers((prev) => duplicateNode(prev, id), 'Duplicate'),

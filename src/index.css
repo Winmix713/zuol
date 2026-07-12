@@ -30,6 +30,18 @@ body {
   background: var(--color-canvas);
   color: var(--color-text-primary);
 }
+/* Toast slide-in animation */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Honour user motion preferences across the whole editor. */
 @media (prefers-reduced-motion: reduce) {
   *,
